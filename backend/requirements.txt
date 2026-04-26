@@ -1,0 +1,21 @@
+# MentorMind DSA API v4.0 — Requirements
+# Install with: pip install -r requirements.txt
+
+# ── Web framework ─────────────────────────────────────────────────────────────
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+pydantic==2.7.1
+python-dotenv==1.0.1
+
+# ── LLM ───────────────────────────────────────────────────────────────────────
+groq==0.9.0
+
+# ── RAG: Embeddings ───────────────────────────────────────────────────────────
+sentence-transformers==3.0.1   # embedding model: all-MiniLM-L6-v2 (~80 MB)
+torch==2.3.0                   # required by sentence-transformers
+
+# ── RAG: Vector store ─────────────────────────────────────────────────────────
+faiss-cpu==1.8.0           # persistent local vector DB (no external service needed)
+
+# ── Database ──────────────────────────────────────────────────────────────────
+# sqlite3 is part of Python stdlib — no extra install needed
