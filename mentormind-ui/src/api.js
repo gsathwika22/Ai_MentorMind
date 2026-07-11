@@ -1,4 +1,4 @@
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = 'http://ai-mentormind-env.eba-mdfifuq5.ap-south-1.elasticbeanstalk.com';
 
 export const chatWithMentor = async (studentName, messages, learningMode = 'Beginner', language = 'English', codeSnippet = null) => {
   const response = await fetch(`${API_BASE}/ask`, {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Bot, ChevronRight, Lock, User, Loader2 } from 'lucide-react';
-import '../index.css';
+import "../index.css";
 
 const LoginScreen = ({ onLogin }) => {
   const [name, setName] = useState('');
