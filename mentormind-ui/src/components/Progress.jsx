@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { AlertCircle, Target, TrendingUp, MessageSquare } from 'lucide-react';
+import { AlertCircle, Target, TrendingUp, MessageSquare, BarChart2 } from 'lucide-react';
 import { fetchProgress } from '../api';
+import { translations } from '../translations';
 import '../index.css';
 
-const Progress = ({ studentName }) => {
+const Progress = ({ studentName, language }) => {
+  const t = translations[language] || translations['English'];
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -23,15 +25,15 @@ const Progress = ({ studentName }) => {
   }, [studentName]);
 
   if (loading) {
-    return <div className="glass-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>Loading your stats...</div>;
+    return <div className="glass-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>{t.loading}</div>;
   }
 
   if (!stats || !stats.topic_stats || stats.topic_stats.length === 0) {
     return (
       <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center', padding: '2rem' }}>
         <Target size={64} color="var(--text-secondary)" style={{ marginBottom: '1rem' }} />
-        <h2 style={{ marginBottom: '1rem' }}>No Data Yet</h2>
-        <p style={{ color: 'var(--text-secondary)', maxWidth: '400px' }}>Start chatting with MentorMind to identify your weak spots. The more you discuss, the better we can track your progress.</p>
+        <h2 style={{ marginBottom: '1rem' }}>{t.noDataYet}</h2>
+        <p style={{ color: 'var(--text-secondary)', maxWidth: '400px' }}>{t.startChatting}</p>
       </div>
     );
   }
@@ -46,9 +48,14 @@ const Progress = ({ studentName }) => {
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '1.5rem', overflowY: 'auto', paddingRight: '1rem' }}>
-      <div className="glass-panel" style={{ padding: '1.5rem' }}>
-        <h2 style={{ fontSize: '1.8rem', marginBottom: '0.5rem' }}>Your Progress Dashboard</h2>
-        <p style={{ color: 'var(--text-secondary)' }}>Based on your interactions with MentorMind</p>
+      <div className="glass-panel" style={{ padding: '0' }}>
+        <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <BarChart2 size={28} color="var(--accent-purple)" />
+          <div>
+            <h2 style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>{t.progressDashboard}</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{t.trackGrowth}</p>
+          </div>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
@@ -90,13 +97,13 @@ const Progress = ({ studentName }) => {
         <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column' }}>
           <h3 style={{ marginBottom: '1.5rem' }}>Frequency of Weak Topics (Counts)</h3>
           <div style={{ flex: 1, minHeight: '300px' }}>
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height={300}>
               <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 50 }}>
                 <XAxis dataKey="name" stroke="var(--text-secondary)" tick={{ fill: 'var(--text-secondary)' }} angle={-45} textAnchor="end" />
                 <YAxis stroke="var(--text-secondary)" tick={{ fill: 'var(--text-secondary)' }} />
-                <Tooltip 
-                  cursor={{ fill: 'rgba(255,255,255,0.05)' }} 
-                  contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '8px' }} 
+                <Tooltip
+                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                  contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '8px' }}
                 />
                 <Bar dataKey="count" radius={[4, 4, 0, 0]}>
                   {chartData.map((entry, index) => (
@@ -112,10 +119,10 @@ const Progress = ({ studentName }) => {
           <h3 style={{ marginBottom: '1.5rem' }}>Areas to Improve</h3>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {weaknesses.map((w, idx) => (
-              <li key={idx} style={{ 
-                background: 'var(--bg-tertiary)', 
-                padding: '1rem', 
-                borderRadius: '8px', 
+              <li key={idx} style={{
+                background: 'var(--bg-tertiary)',
+                padding: '1rem',
+                borderRadius: '8px',
                 borderLeft: `4px solid ${idx === 0 ? 'var(--error)' : 'var(--accent-purple)'}`,
                 display: 'flex',
                 justifyContent: 'space-between',

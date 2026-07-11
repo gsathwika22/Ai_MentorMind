@@ -18,6 +18,7 @@ def create_tables():
         CREATE TABLE IF NOT EXISTS students (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             name       TEXT UNIQUE NOT NULL,
+            points     INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -69,9 +70,9 @@ def get_or_create_student(name: str) -> dict:
         student = dict(row)
         student["is_new"] = False
     else:
-        cursor.execute("INSERT INTO students (name) VALUES (?)", (name,))
+        cursor.execute("INSERT INTO students (name, points) VALUES (?, 0)", (name,))
         conn.commit()
-        student = {"id": cursor.lastrowid, "name": name, "is_new": True}
+        student = {"id": cursor.lastrowid, "name": name, "points": 0, "is_new": True}
 
     conn.close()
     return student
@@ -159,3 +160,18 @@ def mark_problem_solved(session_id: int):
     )
     conn.commit()
     conn.close()
+
+def add_points(student_id: int, points: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE students SET points = points + ? WHERE id = ?", (points, student_id))
+    conn.commit()
+    conn.close()
+
+def get_leaderboard(limit: int = 10) -> list:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT name, points FROM students ORDER BY points DESC LIMIT ?", (limit,))
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows

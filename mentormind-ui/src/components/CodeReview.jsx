@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Trash2, Download } from 'lucide-react';
-import jsPDF from 'jspdf';
-import { chatWithMentor, resetSession } from '../api';
+import { Send, Bot, User, Code } from 'lucide-react';
+import { chatWithMentor } from '../api';
 import { translations } from '../translations';
 import '../index.css';
 
@@ -31,15 +30,15 @@ const renderMessage = (text) => {
   });
 };
 
-const Chat = ({ studentName, language }) => {
+const CodeReview = ({ studentName, language }) => {
   const t = translations[language] || translations['English'];
 
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: `${t.welcome} ${studentName}! ${t.welcomeChat}` }
+    { role: 'assistant', content: `${t.welcome} ${studentName}! ${t.welcomeCode}` }
   ]);
+  const [code, setCode] = useState('');
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [learningMode, setLearningMode] = useState('Beginner');
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -52,17 +51,30 @@ const Chat = ({ studentName, language }) => {
 
   const handleSend = async (e) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if ((!input.trim() && !code.trim()) || isLoading) return;
 
-    const userMessage = { role: 'user', content: input.trim() };
-    const newMessages = [...messages, userMessage];
+    const userMessageContent = input.trim() || "Please review my code.";
+    const userMessage = { role: 'user', content: userMessageContent };
+    
+    // Display code in the UI chat
+    const displayContent = code.trim() ? `${userMessageContent}\n\nCode Submitted:\n\`\`\`\n${code}\n\`\`\`` : userMessageContent;
+    
+    const displayMessage = { role: 'user', content: displayContent };
+    
+    const newMessages = [...messages, displayMessage];
     setMessages(newMessages);
+    
+    const submittedCode = code;
     setInput('');
+    setCode('');
     setIsLoading(true);
 
     try {
-      // we only send the conversation history to the backend (or let it manage it? The API asks for messages)
-      const response = await chatWithMentor(studentName, newMessages, learningMode, language);
+      // Send the actual conversation history (for backend, we just send standard messages format)
+      // Since backend ask_question appends code_snippet, we pass the userMessage without code appended
+      const apiMessages = [...messages.slice(0, -1), userMessage]; // replacing display message with simple one
+      
+      const response = await chatWithMentor(studentName, apiMessages, 'CodeReview', language, submittedCode);
       
       setMessages(prev => [...prev, { 
         role: 'assistant', 
@@ -77,89 +89,14 @@ const Chat = ({ studentName, language }) => {
     }
   };
 
-  const handleReset = async () => {
-    if(window.confirm(t.resetSessionConfirmation)) {
-      await resetSession(studentName);
-      setMessages([{ role: 'assistant', content: t.sessionReset }]);
-    }
-  };
-
-  const downloadChat = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(22);
-    doc.setTextColor(0, 240, 255);
-    doc.text("MentorMind Chat History", 20, 20);
-    
-    doc.setFontSize(14);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Student: ${studentName}`, 20, 30);
-    
-    doc.setDrawColor(200, 200, 200);
-    doc.line(20, 35, 190, 35);
-
-    let y = 45;
-    messages.forEach((msg) => {
-      const isBot = msg.role === 'assistant';
-      const roleName = isBot ? 'MentorMind' : studentName;
-      
-      const textLines = doc.splitTextToSize(msg.content, 170);
-      const textHeight = textLines.length * 7;
-      
-      if (y + textHeight + 10 > 280) {
-        doc.addPage();
-        y = 20;
-      }
-      
-      doc.setFontSize(12);
-      if (isBot) {
-        doc.setTextColor(157, 78, 221); // Purple
-      } else {
-        doc.setTextColor(0, 180, 200); // Cyan
-      }
-      doc.text(`${roleName}:`, 20, y);
-      
-      doc.setFontSize(11);
-      doc.setTextColor(80, 80, 80);
-      doc.text(textLines, 20, y + 7);
-      
-      y += textHeight + 15;
-    });
-
-    doc.save(`${studentName}_MentorMind_Chat.pdf`);
-  };
-
   return (
     <div className="glass-panel animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Header */}
-      <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <Code size={28} color="var(--accent-purple)" />
         <div>
-          <h2 style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>{t.mentorshipSession}</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{t.realTimeGuidance}</p>
-        </div>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <select 
-            value={learningMode} 
-            onChange={(e) => setLearningMode(e.target.value)}
-            style={{ 
-              background: 'rgba(0,0,0,0.3)', 
-              color: 'var(--text-primary)', 
-              border: '1px solid var(--border-highlight)', 
-              padding: '0.5rem 1rem', 
-              borderRadius: '8px',
-              outline: 'none',
-              cursor: 'pointer'
-            }}
-          >
-            <option value="Beginner">{t.beginnerMode}</option>
-            <option value="Intermediate">{t.intermediateMode}</option>
-            <option value="Advanced">{t.advancedMode}</option>
-          </select>
-          <button onClick={downloadChat} className="btn-secondary" style={{ padding: '0.5rem 1rem', color: 'var(--accent-cyan)' }} title="Download Chat">
-            <Download size={18} />
-          </button>
-          <button onClick={handleReset} className="btn-secondary" style={{ padding: '0.5rem 1rem', color: 'var(--error)' }} title="Reset Session">
-            <Trash2 size={18} />
-          </button>
+          <h2 style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>{t.codeSubmission}</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{t.socraticGuidance}</p>
         </div>
       </div>
 
@@ -186,12 +123,9 @@ const Chat = ({ studentName, language }) => {
                 borderTopLeftRadius: isBot ? 0 : '12px',
                 borderTopRightRadius: isBot ? '12px' : 0,
               }}>
-                <p style={{ margin: 0, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{renderMessage(msg.content)}</p>
-                {msg.topic && (
-                  <div style={{ marginTop: '0.75rem', display: 'inline-block', fontSize: '0.75rem', padding: '0.25rem 0.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', color: 'var(--text-secondary)' }}>
-                    Topic: {msg.topic.replace('_', ' ')}
-                  </div>
-                )}
+                <pre style={{ margin: 0, lineHeight: 1.6, whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
+                  {renderMessage(msg.content)}
+                </pre>
               </div>
             </div>
           )
@@ -202,7 +136,7 @@ const Chat = ({ studentName, language }) => {
               <Bot size={20} color="var(--accent-purple)" />
             </div>
             <div style={{ padding: '1rem', borderRadius: '12px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderTopLeftRadius: 0 }}>
-              <p style={{ margin: 0, color: 'var(--text-secondary)' }}>{t.thinking}</p>
+              <p style={{ margin: 0, color: 'var(--text-secondary)' }}>{t.reviewingCode}</p>
             </div>
           </div>
         )}
@@ -210,19 +144,28 @@ const Chat = ({ studentName, language }) => {
       </div>
 
       {/* Input Area */}
-      <div style={{ padding: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
+      <div style={{ padding: '1.5rem', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <textarea
+          className="input-glass"
+          placeholder={t.pasteCode}
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          disabled={isLoading}
+          style={{ padding: '1rem', height: '100px', resize: 'vertical', fontFamily: 'monospace' }}
+        />
         <form onSubmit={handleSend} style={{ display: 'flex', gap: '1rem' }}>
           <input
             type="text"
             className="input-glass"
-            placeholder={t.typeAnswer}
+            placeholder={t.askQuestionOptional}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={isLoading}
-            style={{ padding: '1.25rem 1.5rem' }}
+            style={{ padding: '1rem' }}
           />
-          <button type="submit" className="btn-primary" disabled={isLoading} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '60px', borderRadius: '12px' }}>
+          <button type="submit" className="btn-primary" disabled={isLoading} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '120px', borderRadius: '12px', gap: '0.5rem' }}>
             <Send size={20} />
+            {t.submit}
           </button>
         </form>
       </div>
@@ -230,4 +173,4 @@ const Chat = ({ studentName, language }) => {
   );
 };
 
-export default Chat;
+export default CodeReview;

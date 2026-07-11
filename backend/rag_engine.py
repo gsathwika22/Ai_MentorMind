@@ -18,14 +18,11 @@ Three bugs fixed vs the original implementation:
            Fix: fetch top_k * 4 candidates, filter, then take the first top_k.
 """
 
-from __future__ import annotations
-
 import logging
+import math
+import re
+from collections import Counter
 from typing import Optional
-
-import faiss
-import numpy as np
-from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -409,48 +406,45 @@ DSA_KNOWLEDGE: list[dict] = [
 
 # ── RAGEngine ─────────────────────────────────────────────────────────────────
 
+def tokenize(text: str) -> list[str]:
+    return re.findall(r'\b\w+\b', text.lower())
+
 class RAGEngine:
     """
-    FAISS-backed RAG engine with correct cosine similarity.
-
-    Index choice: IndexFlatIP on L2-normalised vectors.
-    On unit vectors, inner product == cosine similarity, so scores are in
-    [0.0, 1.0] where 1.0 = identical. This is what the API and frontend expect.
+    Lightweight TF-IDF backed RAG engine.
+    Replaces sentence-transformers and FAISS to avoid PyTorch Out-Of-Memory (OOM) errors.
     """
 
     def __init__(self):
-        self._model: Optional[SentenceTransformer] = None
-        self._index: Optional[faiss.Index] = None
-        self._metadata: list[dict] = []
+        self._metadata = DSA_KNOWLEDGE
+        self._tf = []
+        self._idf = {}
         self._initialize()
 
     # ── Init ──────────────────────────────────────────────────────────────────
 
     def _initialize(self):
-        logger.info("Initialising FAISS RAG engine …")
-
-        self._model    = SentenceTransformer(EMBED_MODEL)
-        self._metadata = DSA_KNOWLEDGE
-        texts          = [c["text"] for c in DSA_KNOWLEDGE]
-
-        # Embed all chunks
-        embeddings = self._model.encode(texts, show_progress_bar=False)
-
-        # ✅ FIX 1: L2-normalise so inner product == cosine similarity
-        faiss.normalize_L2(embeddings)
-
-        # ✅ FIX 1 (cont): Use IndexFlatIP, not IndexFlatL2
-        dim         = embeddings.shape[1]
-        self._index = faiss.IndexFlatIP(dim)
-        self._index.add(embeddings)
-
-        logger.info("FAISS index ready | %d chunks | dim=%d | metric=cosine", len(texts), dim)
+        logger.info("Initialising lightweight TF-IDF RAG engine …")
+        N = len(self._metadata)
+        df = Counter()
+        
+        for chunk in self._metadata:
+            tokens = tokenize(chunk["topic"].replace("_", " ") + " " + chunk["text"])
+            tf_counts = Counter(tokens)
+            self._tf.append(tf_counts)
+            for token in set(tokens):
+                df[token] += 1
+                
+        for token, count in df.items():
+            self._idf[token] = math.log((1 + N) / (1 + count)) + 1
+            
+        logger.info("TF-IDF index ready | %d chunks", N)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
     def ingest(self, force: bool = False) -> int:
-        """FAISS is in-memory — ingestion happens at init. Returns chunk count."""
-        return self._index.ntotal
+        """In-memory TF-IDF index. Ingestion happens at init. Returns chunk count."""
+        return len(self._metadata)
 
     def retrieve(
         self,
@@ -459,41 +453,49 @@ class RAGEngine:
         topic_filter: Optional[str] = None,
     ) -> list[dict]:
         """
-        Return the top_k most semantically similar DSA knowledge chunks.
-
-        Scores are cosine similarities in [0.0, 1.0].
-        Higher score = more relevant.
+        Return the top_k most relevant DSA knowledge chunks using TF-IDF.
         """
-        # Embed and normalise the query vector
-        query_vec = self._model.encode([query], show_progress_bar=False)
-        faiss.normalize_L2(query_vec)
-
-        # ✅ FIX 3: fetch extra candidates so filtering still returns top_k
-        fetch_k = top_k * 4 if topic_filter else top_k
-        fetch_k = min(fetch_k, self._index.ntotal)
-
-        scores, indices = self._index.search(query_vec, fetch_k)
-
+        query_tokens = tokenize(query)
+        if not query_tokens:
+            return []
+            
+        scores = []
+        query_tf = Counter(query_tokens)
+        
+        for i, chunk in enumerate(self._metadata):
+            if topic_filter and chunk["topic"] != topic_filter:
+                continue
+                
+            score = 0.0
+            for token, q_tf in query_tf.items():
+                if token in self._tf[i]:
+                    # TF-IDF of document
+                    doc_tfidf = self._tf[i][token] * self._idf.get(token, 1.0)
+                    # TF-IDF of query
+                    q_tfidf = q_tf * self._idf.get(token, 1.0)
+                    score += doc_tfidf * q_tfidf
+            
+            scores.append((score, i))
+            
+        # Normalize scores to be roughly between 0 and 1 just to mimic cosine similarity
+        max_score = max([s for s, i in scores]) if scores else 1.0
+        if max_score == 0: max_score = 1.0
+            
+        scores.sort(reverse=True, key=lambda x: x[0])
+        
         chunks = []
-        for score, idx in zip(scores[0], indices[0]):
-            if idx < 0:            # FAISS returns -1 for empty slots
+        for score, idx in scores[:top_k]:
+            if score == 0.0:
                 continue
             meta = self._metadata[idx]
-
-            if topic_filter and meta["topic"] != topic_filter:
-                continue           # skip non-matching topics
-
-            # ✅ FIX 2: score is now a true cosine similarity (higher = better)
+            normalized_score = min(1.0, score / max_score)
             chunks.append({
                 "id":         meta["id"],
                 "topic":      meta["topic"],
                 "chunk_type": meta["chunk_type"],
                 "text":       meta["text"],
-                "score":      round(float(score), 4),
+                "score":      round(normalized_score, 4),
             })
-
-            if len(chunks) == top_k:
-                break              # stop once we have enough after filtering
 
         logger.info(
             "Retrieved %d chunks | '%s…' | scores=%s",
@@ -511,7 +513,7 @@ class RAGEngine:
         if not chunks:
             return "No relevant DSA knowledge retrieved.", []
 
-        lines = ["=== RETRIEVED DSA KNOWLEDGE (ranked by cosine similarity) ===\n"]
+        lines = ["=== RETRIEVED DSA KNOWLEDGE (ranked by relevance) ===\n"]
         for i, chunk in enumerate(chunks, 1):
             label = chunk["topic"].replace("_", " ").title()
             lines.append(

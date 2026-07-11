@@ -28,6 +28,8 @@ from database import (
     get_topic_stats,
     save_message,
     upsert_topic_stat,
+    add_points,
+    get_leaderboard,
 )
 from rag_engine import rag_engine
 
@@ -76,6 +78,8 @@ class ChatRequest(BaseModel):
     messages: List[Message]
     student_name: str
     learning_mode: str = "Beginner"
+    language: str = "English"
+    code_snippet: Optional[str] = None
 
 class ChatResponse(BaseModel):
     answer: str
@@ -100,6 +104,7 @@ def build_system_prompt(
     learning_mode: str,
     rag_context: str,
     conversation_summary: str,
+    language: str,
 ) -> str:
     mode_instructions = {
         "Beginner": (
@@ -130,6 +135,11 @@ STRICT RULES:
 - Always end your response with exactly ONE guiding question to move the student forward.
 - Be encouraging but honest — point out misconceptions clearly.
 - Keep responses concise (under 200 words).
+- You MUST respond in the following language: {language}.
+- **CRITICAL**: You MUST ALWAYS append a "📚 References:" section at the very end of your response for the specific DSA concept.
+  1. Provide a YouTube tutorial search link format: `[YouTube Tutorial](https://www.youtube.com/results?search_query=topic+name)`
+  2. Provide a LeetCode or GeeksForGeeks practice link format: `[Practice Problem](https://leetcode.com/problemset/all/?search=topic+name)`
+  Replace "topic+name" with the exact DSA concept being discussed.
 
 {rag_context}
 
@@ -206,6 +216,10 @@ def ask_question(chat: ChatRequest):
 
     last_message = conversation[-1]["content"]
 
+    if chat.code_snippet:
+        last_message += f"\n\nStudent's Code Submission:\n```\n{chat.code_snippet}\n```\nReview this code pointing out logical errors and ask guiding questions without giving the optimal solution."
+        conversation[-1]["content"] = last_message
+
     # 2. RAG retrieval — semantic search over ChromaDB
     rag_context, retrieved_chunks = rag_engine.build_context(last_message, top_k=4)
 
@@ -229,6 +243,7 @@ def ask_question(chat: ChatRequest):
         learning_mode=chat.learning_mode,
         rag_context=rag_context,
         conversation_summary=history_context,
+        language=chat.language,
     )
 
     # 6. LLM call
@@ -242,9 +257,10 @@ def ask_question(chat: ChatRequest):
     )
     answer = response.choices[0].message.content
 
-    # 7. Persist messages
+    # 7. Persist messages and add points
     save_message(student_id, "user",      last_message, primary_topic)
     save_message(student_id, "assistant", answer,       primary_topic)
+    add_points(student_id, 5) # 5 points per interaction
 
     return ChatResponse(
         answer=answer,
@@ -287,6 +303,11 @@ def get_progress(student_name: str):
         message_count=msg_count,
     )
 
+
+@app.get("/leaderboard")
+def api_get_leaderboard():
+    leaders = get_leaderboard(10)
+    return {"leaderboard": leaders}
 
 @app.delete("/reset/{student_name}")
 def reset_student(student_name: str):

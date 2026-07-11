@@ -1,12 +1,17 @@
 import React from 'react';
-import { MessageSquare, BarChart2, CheckSquare, LogOut, Bot } from 'lucide-react';
+import { MessageSquare, BarChart2, CheckSquare, LogOut, Bot, Code, Trophy, Globe } from 'lucide-react';
+import { translations } from '../translations';
 import '../index.css';
 
-const Sidebar = ({ activeTab, setActiveTab, studentName, onLogout }) => {
+const Sidebar = ({ activeTab, setActiveTab, studentName, onLogout, language, setLanguage }) => {
+  const t = translations[language] || translations['English'];
+
   const tabs = [
-    { id: 'chat', label: 'Mentorship Chat', icon: MessageSquare },
-    { id: 'progress', label: 'Progress & Weaknesses', icon: BarChart2 },
-    { id: 'quiz', label: 'Quizzes & Marks', icon: CheckSquare },
+    { id: 'chat', label: t.mentorshipChat, icon: MessageSquare },
+    { id: 'codereview', label: t.codeReview, icon: Code },
+    { id: 'progress', label: t.progressWeaknesses, icon: BarChart2 },
+    { id: 'quiz', label: t.quizzesMarks, icon: CheckSquare },
+    { id: 'leaderboard', label: t.leaderboard, icon: Trophy },
   ];
 
   return (
@@ -28,7 +33,7 @@ const Sidebar = ({ activeTab, setActiveTab, studentName, onLogout }) => {
 
       <div style={{ marginBottom: '2rem' }}>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
-          Student Profile
+          {t.studentProfile}
         </p>
         <div style={{ background: 'rgba(0, 240, 255, 0.1)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(0, 240, 255, 0.2)' }}>
           <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.1rem' }}>{studentName}</h3>
@@ -79,13 +84,39 @@ const Sidebar = ({ activeTab, setActiveTab, studentName, onLogout }) => {
         })}
       </nav>
 
+      <div style={{ marginTop: 'auto', marginBottom: '1.5rem' }}>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '1px' }}>
+          {t.language}
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--bg-tertiary)', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+          <Globe size={18} color="var(--accent-cyan)" />
+          <select 
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            style={{ 
+              background: 'transparent', 
+              color: 'var(--text-primary)', 
+              border: 'none', 
+              outline: 'none',
+              width: '100%',
+              cursor: 'pointer',
+              fontFamily: 'Inter'
+            }}
+          >
+            <option value="English">English</option>
+            <option value="Hindi">हिंदी (Hindi)</option>
+            <option value="Telugu">తెలుగు (Telugu)</option>
+          </select>
+        </div>
+      </div>
+
       <button
         onClick={onLogout}
         className="btn-secondary"
         style={{ marginTop: 'auto', justifyContent: 'center' }}
       >
         <LogOut size={18} />
-        Logout
+        {t.logout}
       </button>
     </div>
   );

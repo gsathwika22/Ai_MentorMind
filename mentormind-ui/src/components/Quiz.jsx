@@ -28,10 +28,16 @@ const Quiz = ({ studentName }) => {
       // The API returns { topic, difficulty, quiz: "stringified JSON" }
       let parsedQuiz = [];
       try {
-        parsedQuiz = JSON.parse(data.quiz);
+        let cleanQuizStr = data.quiz.replace(/```json/gi, '').replace(/```/g, '').trim();
+        parsedQuiz = JSON.parse(cleanQuizStr);
       } catch (e) {
-        parsedQuiz = [];
+        throw new Error('Failed to parse quiz format. Please try again.');
       }
+      
+      if (!parsedQuiz || parsedQuiz.length === 0) {
+        throw new Error('No valid questions generated. Please try again.');
+      }
+      
       setQuizData({ ...data, questions: parsedQuiz });
     } catch (err) {
       setError(err.message || 'Failed to generate quiz');
